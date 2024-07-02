@@ -9,7 +9,7 @@ import net.minecraft.world.level.Level;
 public class PositionMissile<T extends PosMissileStats> extends EntityMissile<T> {
 	
 	public PositionMissile(EntityType<? extends PositionMissile<?>> type, Level level, String defaultWeaponId) {
-		super(type, level, defaultWeaponId);
+		super(type, level, defaultWeaponId,0.001);
 	}
 	
 	@Override

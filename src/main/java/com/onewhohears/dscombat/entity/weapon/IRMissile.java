@@ -19,7 +19,7 @@ import net.minecraft.world.phys.AABB;
 public class IRMissile<T extends IRMissileStats> extends EntityMissile<T> {
 	
 	public IRMissile(EntityType<? extends IRMissile<?>> type, Level level, String defaultWeaponId) {
-		super(type, level, defaultWeaponId);
+		super(type, level, defaultWeaponId,0.001);
 	}
 	
 	@Override

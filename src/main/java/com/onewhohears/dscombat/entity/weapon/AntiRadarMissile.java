@@ -1,6 +1,7 @@
 package com.onewhohears.dscombat.entity.weapon;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 import com.onewhohears.dscombat.data.weapon.WeaponType;
@@ -15,7 +16,7 @@ import net.minecraft.world.phys.AABB;
 public class AntiRadarMissile<T extends AntiRadarMissileStats> extends EntityMissile<T> {
 	
 	public AntiRadarMissile(EntityType<? extends AntiRadarMissile<?>> type, Level level, String defaultWeaponId) {
-		super(type, level, defaultWeaponId);
+		super(type, level, defaultWeaponId,0.001);
 	}
 	
 	@Override
@@ -35,38 +36,44 @@ public class AntiRadarMissile<T extends AntiRadarMissileStats> extends EntityMis
 	}
 	
 	protected List<ARTarget> targets = new ArrayList<ARTarget>();
-	
+
 	protected void findARTarget() {
-		// IDEA 7 make anti radar missile target entity type configurable so entities other mod entities can be targeted
 		targets.clear();
-		// planes
-		List<EntityVehicle> vehicles = level.getEntitiesOfClass(
-				EntityVehicle.class, getARBoundingBox());
-		for (int i = 0; i < vehicles.size(); ++i) {
-			EntityVehicle vehicle = vehicles.get(i);
-			if (!vehicle.radarSystem.hasRadar()) continue;
-			if (vehicle.getRadarMode().isOff()) continue;
-			if (!vehicle.radarSystem.canServerTick()) continue;
-			if (!basicCheck(vehicle)) continue;
-			float distSqr = (float)distanceToSqr(vehicle);
-			targets.add(new ARTarget(vehicle, 
-				(float)vehicle.radarSystem.getMaxAirRange() / distSqr));
+
+		// Get all vehicles within the bounding box
+		List<EntityVehicle> vehicles = level.getEntitiesOfClass(EntityVehicle.class, getARBoundingBox());
+
+		for (EntityVehicle vehicle : vehicles) {
+			if (isValidTarget(vehicle)) {
+				float distSqr = (float) distanceToSqr(vehicle);
+				float radiation = (float) vehicle.radarSystem.getMaxAirRange() / distSqr;
+				targets.add(new ARTarget(vehicle, radiation));
+			}
 		}
-		// pick target
-		if (targets.size() == 0) {
-			this.target = null;
-			this.targetPos = null;
-			//System.out.println("NO TARGET");
+
+		// Pick the best target based on radiation
+		if (targets.isEmpty()) {
+			target = null;
+			targetPos = null;
 			return;
 		}
-		ARTarget max = targets.get(0);
-		for (int i = 1; i < targets.size(); ++i) 
-			if (targets.get(i).radiation > max.radiation) 
-				max = targets.get(i);
-		this.target = max.entity;
-		this.targetPos = max.entity.position();
+
+		ARTarget bestTarget = targets.stream()
+				.max(Comparator.comparingDouble(t -> t.radiation))
+				.orElse(null);
+
+        target = bestTarget.entity;
+        targetPos = bestTarget.entity.position();
+    }
+
+	private boolean isValidTarget(EntityVehicle vehicle) {
+		return vehicle.radarSystem.hasRadar() &&
+				!vehicle.getRadarMode().isOff() &&
+				vehicle.radarSystem.canServerTick() &&
+				basicCheck(vehicle);
 	}
-	
+
+
 	protected boolean basicCheck(Entity ping) {
 		//System.out.println("target? "+ping);
 		if (!ping.isOnGround()) {

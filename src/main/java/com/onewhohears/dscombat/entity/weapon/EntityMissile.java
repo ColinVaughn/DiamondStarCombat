@@ -36,19 +36,22 @@ import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.Vec3;
 
 public abstract class EntityMissile<T extends MissileStats> extends EntityBullet<T> {
-	
+	private static final double GRAVITY = 0.49; // Gravity force
 	public static final EntityDataAccessor<Integer> TARGET_ID = SynchedEntityData.defineId(EntityMissile.class, EntityDataSerializers.INT);
 	public static final EntityDataAccessor<Vec3> TARGET_POS = SynchedEntityData.defineId(EntityMissile.class, DataSerializers.VEC3);
-	
+
 	public Entity target;
 	public Vec3 targetPos;
-	
+
 	private boolean discardedButTicking;
 	private int prevTickCount, tickCountRepeats, repeatCoolDown, lerpSteps;
 	private double lerpX, lerpY, lerpZ, lerpXRot, lerpYRot;
-	
-	public EntityMissile(EntityType<? extends EntityMissile<?>> type, Level level, String defaultWeaponId) {
+
+	protected double turnEnergyLossFactor;
+
+	public EntityMissile(EntityType<? extends EntityMissile<?>> type, Level level, String defaultWeaponId, double turnEnergyLossFactor) {
 		super(type, level, defaultWeaponId);
+		this.turnEnergyLossFactor = turnEnergyLossFactor;
 		if (!level.isClientSide) NonTickingMissileManager.addMissile(this);
 	}
 	
@@ -215,39 +218,55 @@ public abstract class EntityMissile<T extends MissileStats> extends EntityBullet
 	public boolean dieIfNoTargetOutsideTickRange() {
 		return true;
 	}
-	
+
 	@Override
 	protected void tickSetMove() {
 		Vec3 cm = getDeltaMovement();
 		double max = getSpeed();
 		double B = getBleed() * UtilEntity.getAirPressure(this);
-		double bleed = B * (Math.abs(getXRot()-xRotO)+Math.abs(getYRot()-yRotO));
+		double bleed = B * (Math.abs(getXRot() - xRotO) + Math.abs(getYRot() - yRotO));
 		double vel = cm.length() - bleed;
+
 		if (getAge() <= getFuelTicks()) vel += getAcceleration();
 		if (vel > max) vel = max;
 		else if (vel < 0.1) vel = 0.1;
-		Vec3 nm = getLookAngle().scale(vel);
+
+		// Apply gravity
+		Vec3 gravity = new Vec3(0, -GRAVITY, 0);
+
+		Vec3 nm = getLookAngle().scale(vel).add(gravity); // Add gravity to the new movement vector
 		setDeltaMovement(nm);
 	}
-	
+
+
+
+
 	public void guideToPosition() {
 		if (targetPos == null) return;
 		Vec3 goal_dir = targetPos.subtract(position());
 		Vec3 cur_dir = getLookAngle();
-		float deg_diff = (float)UtilGeometry.angleBetweenDegrees(goal_dir, cur_dir);
+		float deg_diff = (float) UtilGeometry.angleBetweenDegrees(goal_dir, cur_dir);
 		float rot = getTurnDegrees();
+
+		// Simulate energy loss during turns
+		double turnEnergyLoss = deg_diff * turnEnergyLossFactor;
+		double newSpeed = getDeltaMovement().length() - turnEnergyLoss;
+		if (newSpeed < 0.1) newSpeed = 0.1; // Prevent speed from dropping below a minimum threshold
+		setDeltaMovement(getLookAngle().scale(newSpeed));
+
 		if (deg_diff <= rot) {
 			setXRot(UtilAngles.getPitch(goal_dir));
 			setYRot(UtilAngles.getYaw(goal_dir));
 		} else {
 			Vec3 P = cur_dir.cross(goal_dir).normalize();
 			Vec3 new_dir = UtilAngles.rotateVector(cur_dir, new Quaternion(
-					UtilGeometry.convertVector(P), 
+					UtilGeometry.convertVector(P),
 					rot, true));
 			setXRot(UtilAngles.getPitch(new_dir));
 			setYRot(UtilAngles.getYaw(new_dir));
 		}
 	}
+
 	
 	public float getTurnDegrees() {
 		return (float)getDeltaMovement().length() / getTurnRadius() * Mth.RAD_TO_DEG;

@@ -11,7 +11,7 @@ import net.minecraft.world.level.Level;
 public class TrackEntityMissile<T extends TrackMissileStats> extends EntityMissile<T> {
 	
 	public TrackEntityMissile(EntityType<? extends TrackEntityMissile<?>> type, Level level, String defaultWeaponId) {
-		super(type, level, defaultWeaponId);
+		super(type, level, defaultWeaponId,0.001);
 	}
 	
 	@Override
